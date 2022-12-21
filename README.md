@@ -61,7 +61,7 @@ Then to solve the problem you have to open modules/contrib/src/rgbdodometry.cpp 
   
   input image : ```test.jpg```
   
-  ```python push_net_main.py```
+  ```python train.py```
   
   result: the input image with the best action (red arrow) will be displayed
   
