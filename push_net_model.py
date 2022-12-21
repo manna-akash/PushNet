@@ -262,7 +262,7 @@ def get_num_parameters(model):
 
 if __name__=='__main__':
     net = COM_net_sim(args.batch_size)
-    print get_num_parameters(net)
+    print(get_num_parameters(net))
 
 
 

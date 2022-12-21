@@ -123,10 +123,10 @@ def test_transform():
     cv2.waitKey(0)
 
     ## estimate transformation
-    print 'true transformation:'
-    print y, x, w
-    print 'estimated transformation:'
-    print get_img_transform(img.copy(), img_f.copy())
+    print('true transformation:')
+    print(y, x, w)
+    print('estimated transformation:')
+    print(get_img_transform(img.copy(), img_f.copy()))
 
 #test_transform()
 

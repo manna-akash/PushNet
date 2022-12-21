@@ -181,19 +181,19 @@ class PushController:
         img_inner = cv2.resize(img.copy(), (0,0), fx=s, fy=s, interpolation=cv2.INTER_AREA)
         h, w = img_inner.shape
         img_end = np.zeros((int(H), int(W)))
-        img_end[(int(H)-h)/2:(int(H)+h)/2, (int(W)-w)/2:(int(W)+w)/2] = img_inner.copy()
+        img_end[(int(H)-h)//2:(int(H)+h)//2, (int(W)-w)//2:(int(W)+w)//2] = img_inner.copy()
         (inside_y, inside_x) = np.where(img_end.copy()>0)
 
         ## get indices of start push points outside a safe margin of object
         img_outer1 = cv2.resize(img.copy(), (0,0), fx=safe_margin, fy=safe_margin, interpolation=cv2.INTER_CUBIC)
         h, w = img_outer1.shape
         img_start_safe = np.zeros((int(H), int(W)))
-        img_start_safe = img_outer1.copy()[(h-int(H))/2:(h+int(H))/2, (w-int(W))/2:(w+int(W))/2]
+        img_start_safe = img_outer1.copy()[(h-int(H))//2:(h+int(H))//2, (w-int(W))//2:(w+int(W))//2]
 
         img_outer2 = cv2.resize(img.copy(), (0,0), fx=out_margin, fy=out_margin, interpolation=cv2.INTER_CUBIC)
         h, w = img_outer2.shape
         img_start_out = np.zeros((int(H), int(W)))
-        img_start_out = img_outer2.copy()[(h-int(H))/2:(h+int(H))/2, (w-int(W))/2:(w+int(W))/2]
+        img_start_out = img_outer2.copy()[(h-int(H))//2:(h+int(H))//2, (w-int(W))//2:(w+int(W))//2]
 
         img_start = img_start_out.copy() - img_start_safe.copy()
         (outside_y, outside_x) = np.where(img_start.copy()>100)
@@ -218,7 +218,7 @@ class PushController:
                 start_y = int(outside_y[outside_idx])
 
                 if start_x < 0 or start_x >= W or start_y < 0 or start_y >= H:
-                    print 'out of bound'
+                    print('out of bound')
                     continue
                 if img[start_y, start_x] == 0:
                     break
@@ -282,7 +282,7 @@ class PushController:
 
         action_value_pairs = []
 
-        for i in range(num_action_batch):
+        for i in range(int(num_action_batch)):
             ## keep hidden state the same for all action batches during selection
             if not hidden == None:
                 self.pred.model.hidden = hidden
@@ -327,7 +327,7 @@ class PushController:
         cv2.imshow('action', img_3d)
         if single:
             ## draw the best action
-            print 'press any key to continue ...'
+            print('press any key to continue ...')
             cv2.waitKey(0)
         else:
             ## draw all sample actions
