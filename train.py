@@ -259,44 +259,44 @@ class PushController:
         return actions
 
 
+#XXX
+# def evaluate_minibatch(model, img_curr, img_goal, actions, bs):
+#         ''' calculate the similarity score of actions '''
+#         bs = bs
+#         A1 = []
+#         I1 = []
+#         Ig = []
 
-def evaluate_minibatch(model, img_curr, img_goal, actions, bs):
-        ''' calculate the similarity score of actions '''
-        bs = bs
-        A1 = []
-        I1 = []
-        Ig = []
+#         for i in range(bs):
+#             a1 = [[actions[4*i]/W, actions[4*i+1]/H, actions[4*i+2]/W, actions[4*i+3]/H]]
+#             i1 = [img_curr]
+#             ig = [img_goal]
+#             A1.append(a1)
+#             I1.append(i1)
+#             Ig.append(ig)
 
-        for i in range(bs):
-            a1 = [[actions[4*i]/W, actions[4*i+1]/H, actions[4*i+2]/W, actions[4*i+3]/H]]
-            i1 = [img_curr]
-            ig = [img_goal]
-            A1.append(a1)
-            I1.append(i1)
-            Ig.append(ig)
+#         A1 = torch.from_numpy(np.array(A1)).float()
+#         I1 = torch.from_numpy(np.array(I1)).float().div(255)
+#         Ig = torch.from_numpy(np.array(Ig)).float().div(255)
 
-        A1 = torch.from_numpy(np.array(A1)).float()
-        I1 = torch.from_numpy(np.array(I1)).float().div(255)
-        Ig = torch.from_numpy(np.array(Ig)).float().div(255)
+#         A1 = to_var(A1)
+#         I1 = to_var(I1)
+#         Ig = to_var(Ig)
 
-        A1 = to_var(A1)
-        I1 = to_var(I1)
-        Ig = to_var(Ig)
+#         sim_out = None
+#         com_out = None
 
-        sim_out = None
-        com_out = None
+#         sim_out, com_out = model(A1, I1, A1, Ig, [1 for j in range(bs)], bs)
 
-        sim_out, com_out = model(A1, I1, A1, Ig, [1 for j in range(bs)], bs)
+#         sim_np = sim_out.data.cpu().data.numpy()
+#         com_np = com_out.data.cpu().data.numpy()
 
-        sim_np = sim_out.data.cpu().data.numpy()
-        com_np = com_out.data.cpu().data.numpy()
-
-        sim_sum = np.sum(sim_np, 1) # measure (w ,x, y)
-        com_sum = np.sum(com_np, 1)
-        sim_sum = torch.tensor(sim_sum, requires_grad = True).float()
-        com_sum = torch.tensor(com_sum, requires_grad = True).float()
+#         sim_sum = np.sum(sim_np, 1) # measure (w ,x, y)
+#         com_sum = np.sum(com_np, 1)
+#         sim_sum = torch.tensor(sim_sum, requires_grad = True).float()
+#         com_sum = torch.tensor(com_sum, requires_grad = True).float()
        
-        return sim_sum, com_sum
+#         return sim_sum, com_sum
 
 #NOTE: Akash added
 ####
@@ -339,7 +339,7 @@ def train_model(train_dl, model):
 
     for epoch in range(epochs):
         for i in range(int(num_action_batch)):
-            # optimizer.zero_grad()
+            optimizer.zero_grad()
             ## keep hidden state the same for all action batches during selection
             if not hidden != None:
                 model.hidden = model.init_hidden()
@@ -351,14 +351,7 @@ def train_model(train_dl, model):
                                     prepared_data[3], #goal image
                                     prepared_data[4], #number of actions: for LSTM module
                                     prepared_data[5]) #batchsize
-            sim_np = sim_out.data.cpu().data.numpy()
-            com_np = com_out.data.cpu().data.numpy()
-           
-            
-            sim_sum = np.sum(sim_np, 1) # measure (w ,x, y)
-            com_sum = np.sum(com_np, 1)
-            sim_score = torch.tensor(sim_sum, requires_grad = True).float().cuda()
-            com_score = torch.tensor(com_sum, requires_grad = True).float().cuda()
+
             loss_sim = criterion(sim_out.data.sum(1).float(), torch.from_numpy(sim_out_gt).float().cuda())
             loss_com = criterion(com_out.data.sum(1).float(), torch.from_numpy(com_out_gt).float().cuda())
             #NOTE: Modify constant according to simulator values
@@ -372,10 +365,8 @@ def train_model(train_dl, model):
 						Style.RESET_ALL
 					)
             loss.backward()
-            # loss.item()
+            loss.detach()
             optimizer.step()
-            # gc.collect()
-            # torch.cuda.empty_cache()
 
     torch.save(model.state_dict(), save_path)
 
