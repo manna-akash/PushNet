@@ -15,6 +15,7 @@ import numpy as np
 import pathlib
 import cv2
 import os
+import gc
 
 
 import torch.nn.functional as F
@@ -45,7 +46,7 @@ W = 128.0 ##!!!! Important to make it float to prevent integer division becomes 
 H = 106.0
 
 #Training Params
-epochs =5
+epochs =50
 num_action_batch = args.num_action / args.batch_size#None
 hidden =None
 np.random.seed(42)
@@ -314,6 +315,7 @@ def train_model(train_dl, model):
 
     for epoch in range(epochs):
         for i in range(int(num_action_batch)):
+            optimizer.zero_grad()
             ## keep hidden state the same for all action batches during selection
             if not hidden == None:
                 model.hidden = hidden
@@ -332,9 +334,11 @@ def train_model(train_dl, model):
 						Style.RESET_ALL
 					)
             loss.backward()
-
+            loss.detach()
             optimizer.step()
+            gc.collect()
             torch.cuda.empty_cache()
+
     torch.save(model.state_dict(), save_path)
 
 
