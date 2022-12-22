@@ -3,6 +3,8 @@
 
 ##Imports
 import torch # arrays on GPU
+from torchsummary import summary
+
 import torch.autograd as autograd #build a computational graph
 import torch.nn as nn ## neural net library
 import torch.nn.functional as F ## most non-linearities are here
@@ -48,11 +50,10 @@ H = 106.0
 #Training Params
 epochs =50
 num_action_batch = args.num_action / args.batch_size#None
-hidden =None
-np.random.seed(42)
+hidden = None
 
-sim_out_gt =np.random.rand(25,)
-com_out_gt =np.random.rand(25,)
+sim_out_gt =np.random.rand(2,)
+com_out_gt =np.random.rand(2,)
 
 #saving path
 cwd = str(pathlib.Path(__file__).parent.resolve())
@@ -60,7 +61,7 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 cwd = os.path.join(BASE_DIR, 'PushNet/trained_models/')
 save_path = cwd +"push_net_model.pth"
 
-def to_var(x, volatile=False):
+def to_var(x, volatile=True):
     if torch.cuda.is_available():
         x = x.cuda()
     return Variable(x, volatile=volatile)
@@ -104,6 +105,7 @@ class COM_CNN(nn.Module):
                 init.xavier_uniform(m.weight, gain=np.sqrt(2.0))
 
     def forward(self, x):
+
         x = self.conv1(x)
         x = self.conv2(x)
         x = self.conv3(x)
@@ -152,8 +154,10 @@ class COM_net_sim(nn.Module):
 
         ''' combine img and previous action feature to form one-step history'''
         cat_f1_fa1 = torch.cat((f1, fa1), 1)
-        lstm_inp = self.linear_act_img_curr(cat_f1_fa1)
 
+
+        lstm_inp = self.linear_act_img_curr(cat_f1_fa1)
+        
         ''' pack sequence to feed LSTM '''
         lstm_inp = pack_padded_sequence(lstm_inp.view(bs, -1, LSTM_IN_SIZE),
                 lengths, batch_first=True)
@@ -169,14 +173,13 @@ class COM_net_sim(nn.Module):
         output = self.linear_img_img(torch.abs(fnext - fg))
 
         ''' squash value between (0, 1)'''
-
+        
         sim = F.sigmoid(output)
         com_out = F.sigmoid(com_out)
 
         ''' pack into sequence for output'''
         sim_pack = pack_padded_sequence(sim.view(bs, -1, SIM_SIZE), lengths, batch_first=True)
         com_pack = pack_padded_sequence(com_out.view(bs, -1, 2), lengths, batch_first=True)
-
         return sim_pack, com_pack
 
 
@@ -286,20 +289,41 @@ def evaluate_minibatch(model, img_curr, img_goal, actions, bs):
         sim_out, com_out = model(A1, I1, A1, Ig, [1 for j in range(bs)], bs)
 
         sim_np = sim_out.data.cpu().data.numpy()
-        com_np = com_out[0].data.cpu().data.numpy()
+        com_np = com_out.data.cpu().data.numpy()
 
-        # print("*****************SIM_NP*************************", torch.sum(sim_out[0],1), "\n \n \n ", sim_np)
         sim_sum = np.sum(sim_np, 1) # measure (w ,x, y)
         com_sum = np.sum(com_np, 1)
         sim_sum = torch.tensor(sim_sum, requires_grad = True).float()
         com_sum = torch.tensor(com_sum, requires_grad = True).float()
-        # action_value = []
-        # for ii in range(len(sim_sum)):
-        #     s = [actions[4 * ii], actions[4 * ii + 1]]
-        #     e = [actions[4 * ii + 2], actions[4 * ii + 3]]
-        #     action_value.append([[s, e], sim_sum[ii]])
-        # print("datatype of com_sum", type(com_sum))
+       
         return sim_sum, com_sum
+
+#NOTE: Akash added
+####
+def data_preparation(img_curr, img_goal, actions, bs):
+        ''' calculate the similarity score of actions '''
+        bs = bs
+        A1 = []
+        I1 = []
+        Ig = []
+
+        for i in range(bs):
+            a1 = [[actions[4*i]/W, actions[4*i+1]/H, actions[4*i+2]/W, actions[4*i+3]/H]]
+            i1 = [img_curr]
+            ig = [img_goal]
+            A1.append(a1)
+            I1.append(i1)
+            Ig.append(ig)
+
+        A1 = torch.from_numpy(np.array(A1)).float().cuda()
+        I1 = torch.from_numpy(np.array(I1)).float().div(255).cuda()
+        Ig = torch.from_numpy(np.array(Ig)).float().div(255).cuda()
+
+        #      "Input image>>>>",I1, "\n",
+        #      "goal image>>>>>",Ig, "\n")
+        return A1, I1, A1, Ig, [1 for j in range(bs)], bs
+
+####
 
 
 
@@ -315,29 +339,43 @@ def train_model(train_dl, model):
 
     for epoch in range(epochs):
         for i in range(int(num_action_batch)):
-            optimizer.zero_grad()
+            # optimizer.zero_grad()
             ## keep hidden state the same for all action batches during selection
-            if not hidden == None:
-                model.hidden = hidden
+            if not hidden != None:
+                model.hidden = model.init_hidden()
             action = train_dl[-1][4*i*bs: 4*(i+1)*bs]
-            sim_out, com_out = evaluate_minibatch(model, train_dl[0], train_dl[1], action, bs =bs)
-            loss_sim = criterion(sim_out.float(), torch.from_numpy(sim_out_gt).float())
-            loss_com = criterion(com_out.float(), torch.from_numpy(com_out_gt).float())
+            prepared_data = data_preparation( train_dl[0], train_dl[1], action, bs =bs)
+            sim_out, com_out = model(prepared_data[0], #actionsrandom
+                                    prepared_data[1], #input image
+                                    prepared_data[2], ##actions
+                                    prepared_data[3], #goal image
+                                    prepared_data[4], #number of actions: for LSTM module
+                                    prepared_data[5]) #batchsize
+            sim_np = sim_out.data.cpu().data.numpy()
+            com_np = com_out.data.cpu().data.numpy()
+           
+            
+            sim_sum = np.sum(sim_np, 1) # measure (w ,x, y)
+            com_sum = np.sum(com_np, 1)
+            sim_score = torch.tensor(sim_sum, requires_grad = True).float().cuda()
+            com_score = torch.tensor(com_sum, requires_grad = True).float().cuda()
+            loss_sim = criterion(sim_out.data.sum(1).float(), torch.from_numpy(sim_out_gt).float().cuda())
+            loss_com = criterion(com_out.data.sum(1).float(), torch.from_numpy(com_out_gt).float().cuda())
             #NOTE: Modify constant according to simulator values
             loss = 0.1*loss_com +((0.1*loss_sim)/(1+0.1*loss_com))
             print(
 						Fore.GREEN +
 						'\n-------------------------------------\n' +
                         '|Epoch: '+str(epoch+1) +' | '+'Minibatch:' +str(i+1)+ '|'
-						'| loss ' + str(loss.detach()) + ' |\n' +
+						'| loss ' + str(loss.item()) + ' |\n' +
 						'---------------------------------------\n' +
 						Style.RESET_ALL
 					)
             loss.backward()
-            loss.detach()
+            # loss.item()
             optimizer.step()
-            gc.collect()
-            torch.cuda.empty_cache()
+            # gc.collect()
+            # torch.cuda.empty_cache()
 
     torch.save(model.state_dict(), save_path)
 
