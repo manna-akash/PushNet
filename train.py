@@ -18,6 +18,9 @@ import pathlib
 import cv2
 import os
 import gc
+import matplotlib.pyplot as plt
+import numpy as np
+
 
 
 import torch.nn.functional as F
@@ -52,8 +55,8 @@ epochs =50
 num_action_batch = args.num_action / args.batch_size#None
 hidden = None
 
-sim_out_gt =np.random.rand(2,)
-com_out_gt =np.random.rand(2,)
+sim_out_gt =np.random.rand(10,)
+com_out_gt =np.random.rand(10,)
 
 #saving path
 cwd = str(pathlib.Path(__file__).parent.resolve())
@@ -335,10 +338,11 @@ def train_model(train_dl, model):
     '''
     bs = args.batch_size
     criterion = nn.MSELoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.1)
-
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.0001)
+    loss_values = []
     for epoch in range(epochs):
         for i in range(int(num_action_batch)):
+            loss_values_per_epoch = []
             optimizer.zero_grad()
             ## keep hidden state the same for all action batches during selection
             if not hidden != None:
@@ -359,16 +363,33 @@ def train_model(train_dl, model):
             print(
 						Fore.GREEN +
 						'\n-------------------------------------\n' +
-                        '|Epoch: '+str(epoch+1) +' | '+'Minibatch:' +str(i+1)+ '|'
+                        '|Epoch: '+str(epoch+1)+'/'+str(epochs) +' | '+'Minibatch:' +str(i+1)+ '|'
 						'| loss ' + str(loss.item()) + ' |\n' +
 						'---------------------------------------\n' +
 						Style.RESET_ALL
 					)
-            loss.backward()
-            loss.detach()
+            loss.backward(retain_graph = True)
             optimizer.step()
-
+            loss_values_per_epoch.append(loss.detach())
+        loss_values.append(min(loss_values_per_epoch))
+    print('Finished Training!!!')
     torch.save(model.state_dict(), save_path)
+
+    return loss_values
+
+
+
+def draw_loss(loss:list, title:str)->None:
+    plt.plot([i for i in range(len(loss))], loss, '-r', label = 'Online Loss')
+
+    plt.xlabel('No. of Iteration')
+    plt.ylabel('Loss values')
+
+    plt.legend(loc = 'upper right')
+    plt.title(title)
+
+    #Save image
+    plt.savefig(title.replace(' ', '_')+ '.png')
 
 
 
@@ -380,4 +401,7 @@ if __name__ == "__main__":
     actions = actions.sample_action(img=img, num_actions=args.num_action)
     dl_train = [img, img_in_next, actions]
     dev=torch.device("cuda")
-    train_model(train_dl=dl_train, model=COM_net_sim(args.batch_size).to(dev))
+    loss_values = train_model(train_dl=dl_train, model=COM_net_sim(args.batch_size).to(dev))
+
+    #drawing loss values over iteration
+    draw_loss(loss_values, 'loss over epoch')

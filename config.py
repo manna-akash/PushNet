@@ -1,4 +1,4 @@
-batch_size = 2 ## adjust this number to fit in memory capacity of your GPU
+batch_size =10 ## adjust this number to fit in memory capacity of your GPU
 num_action = 100 ## number of candidates push actions to be sampled from current image, the number should be a multiple of batch_size
 
 ### three differetn network architecture for comparison
