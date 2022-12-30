@@ -30,8 +30,8 @@ import config as args
 from img_utils import *
 from colorama import Fore, Back, Style
 
-WIDTH = 128
-HEIGHT = 106
+WIDTH = 256
+HEIGHT = 212
 
 ACT_SIZE = 4
 ACT_FET = 20
@@ -44,11 +44,17 @@ chan_layer_1 = 16
 chan_layer_2 = 16
 chan_layer_3 = 32
 chan_layer_4 = 32
+chan_layer_4 = 64
+chan_layer_5 = 128
+chan_layer_6 = 256
+chan_layer_7 = 512
+chan_layer_8 = 512
+
 pool_size = 3
 
 ''' Dimension of input image'''
-W = 128.0 ##!!!! Important to make it float to prevent integer division becomes zeros
-H = 106.0
+W = 256 ##!!!! Important to make it float to prevent integer division becomes zeros
+H = 212
 
 #Training Params
 epochs =50
@@ -59,7 +65,6 @@ sim_out_gt =np.random.rand(10,)
 com_out_gt =np.random.rand(10,)
 
 #saving path
-cwd = str(pathlib.Path(__file__).parent.resolve())
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 cwd = os.path.join(BASE_DIR, 'PushNet/trained_models/')
 save_path = cwd +"push_net_model.pth"
@@ -77,28 +82,48 @@ class COM_CNN(nn.Module):
         self.conv1 = nn.Sequential(
                 nn.Conv2d(
                     in_channels=1,
-                    out_channels=chan_layer_1,
+                    out_channels=chan_layer_1, #chan_layer_1 = 16
                     kernel_size=3,
                     stride=1,
                     padding=2,
-                    ),
+                    ), # output ->108 X 130
                 nn.ReLU(),
-                nn.MaxPool2d(kernel_size=pool_size),
+                nn.MaxPool2d(kernel_size=pool_size), #->36 X 43
                 )
         self.conv2 = nn.Sequential(
-                nn.Conv2d(chan_layer_1, chan_layer_2, 3, 1, 2),
+                nn.Conv2d(chan_layer_1, chan_layer_2, 3, 1, 2), # ->38 x 45
                 nn.ReLU(),
-                nn.MaxPool2d(kernel_size=pool_size),
+                nn.MaxPool2d(kernel_size=pool_size), #-> 12 X 15
                 )
         self.conv3 = nn.Sequential(
-                nn.Conv2d(chan_layer_2, chan_layer_3, 3, 1, 2),
+                nn.Conv2d(chan_layer_2, chan_layer_3, 3, 1, 2), #-> 14 X 17
                 nn.ReLU(),
-                nn.MaxPool2d(kernel_size=pool_size),
+                nn.MaxPool2d(kernel_size=pool_size), #-> 4 X 5
                 )
         self.conv4 = nn.Sequential(
-                nn.Conv2d(chan_layer_3, chan_layer_4, 3, 1, 2),
+                nn.Conv2d(chan_layer_3, chan_layer_4, 3, 1, 2), #->6 X 7
                 nn.ReLU(),
-                nn.MaxPool2d(kernel_size=pool_size),
+                nn.MaxPool2d(kernel_size=pool_size), # -> 2 X 2
+                )
+        self.conv5 = nn.Sequential(
+                nn.Conv2d(chan_layer_4, chan_layer_5, 3, 1, 2), #->6 X 7
+                nn.ReLU(),
+                nn.MaxPool2d(kernel_size=pool_size), # -> 2 X 2
+                )
+        self.conv6 = nn.Sequential(
+                nn.Conv2d(chan_layer_5, chan_layer_6, 3, 1, 2), #->6 X 7
+                nn.ReLU(),
+                nn.MaxPool2d(kernel_size=pool_size), # -> 2 X 2
+                )
+        self.conv7 = nn.Sequential(
+                nn.Conv2d(chan_layer_6, chan_layer_7, 3, 1, 2), #->6 X 7
+                nn.ReLU(),
+                nn.MaxPool2d(kernel_size=pool_size), # -> 2 X 2
+                )
+        self.conv8 = nn.Sequential(
+                nn.Conv2d(chan_layer_7, chan_layer_8, 3, 1, 2), #->6 X 7
+                nn.ReLU(),
+                nn.MaxPool2d(kernel_size=pool_size), # -> 2 X 2
                 )
         self.init_weight()
 
@@ -113,6 +138,10 @@ class COM_CNN(nn.Module):
         x = self.conv2(x)
         x = self.conv3(x)
         x = self.conv4(x)
+        x = self.conv5(x)
+        x = self.conv6(x)
+        x = self.conv7(x)
+        x = self.conv8(x)
         x = x.view(x.size(0), -1)
         return x
 
@@ -149,8 +178,8 @@ class COM_net_sim(nn.Module):
         ''' get image and action feature representation'''
 
         ''' flatten mini-batch sequence of images'''
-        f1 = self.cnn(I1.view(-1, 1, 106, 128))
-        fg = self.cnn(Ig.view(-1, 1, 106, 128))
+        f1 = self.cnn(I1.view(-1, 1, H, W)) #(height, weidth)-> input image size
+        fg = self.cnn(Ig.view(-1, 1, H, W)) #(height, weidth)-> input image size
         ''' flatten mini-batch sequence of action'''
         fa1 = self.linear_act(a1.view(-1, 4))
 
@@ -207,7 +236,8 @@ class PushController:
         
 
         ## get indices of end push points inside object mask
-        img_inner = cv2.resize(img.copy(), (0,0), fx=s, fy=s, interpolation=cv2.INTER_AREA)
+        img_inner = cv2.resize(img.copy(), (0,0), fx=s, fy=s, interpolation=cv2.INTER_LINEAR)
+        print('>>>>>>>>>>>>>>>>>....', img.shape)
         h, w = img_inner.shape
         img_end = np.zeros((int(H), int(W)))
         img_end[(int(H)-h)//2:(int(H)+h)//2, (int(W)-w)//2:(int(W)+w)//2] = img_inner.copy()
@@ -223,7 +253,6 @@ class PushController:
         h, w = img_outer2.shape
         img_start_out = np.zeros((int(H), int(W)))
         img_start_out = img_outer2.copy()[(h-int(H))//2:(h+int(H))//2, (w-int(W))//2:(w+int(W))//2]
-
         img_start = img_start_out.copy() - img_start_safe.copy()
         (outside_y, outside_x) = np.where(img_start.copy()>100)
 
@@ -355,7 +384,6 @@ def train_model(train_dl, model):
                                     prepared_data[3], #goal image
                                     prepared_data[4], #number of actions: for LSTM module
                                     prepared_data[5]) #batchsize
-
             loss_sim = criterion(sim_out.data.sum(1).float(), torch.from_numpy(sim_out_gt).float().cuda())
             loss_com = criterion(com_out.data.sum(1).float(), torch.from_numpy(com_out_gt).float().cuda())
             #NOTE: Modify constant according to simulator values
@@ -395,7 +423,7 @@ def draw_loss(loss:list, title:str)->None:
 
 
 if __name__ == "__main__":
-    img = cv2.imread("test.jpg")[:,:,0]
+    img = cv2.resize(cv2.imread("target_pose_post_processing.png"), (256, 212))[:,:,0]
     img_in_next = generate_goal_img(img.copy(), 30, 10, -10)
     actions = PushController()
     actions = actions.sample_action(img=img, num_actions=args.num_action)
