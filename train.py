@@ -20,7 +20,7 @@ import os
 import gc
 import matplotlib.pyplot as plt
 import numpy as np
-
+import time
 
 
 import torch.nn.functional as F
@@ -53,11 +53,11 @@ chan_layer_8 = 512
 pool_size = 3
 
 ''' Dimension of input image'''
-W = 256 ##!!!! Important to make it float to prevent integer division becomes zeros
-H = 212
+W = WIDTH ##!!!! Important to make it float to prevent integer division becomes zeros
+H = HEIGHT
 
 #Training Params
-epochs =50
+epochs = 500
 num_action_batch = args.num_action / args.batch_size#None
 hidden = None
 
@@ -82,48 +82,48 @@ class COM_CNN(nn.Module):
         self.conv1 = nn.Sequential(
                 nn.Conv2d(
                     in_channels=1,
-                    out_channels=chan_layer_1, #chan_layer_1 = 16
+                    out_channels=chan_layer_1, 
                     kernel_size=3,
                     stride=1,
                     padding=2,
-                    ), # output ->108 X 130
+                    ), 
                 nn.ReLU(),
-                nn.MaxPool2d(kernel_size=pool_size), #->36 X 43
+                nn.MaxPool2d(kernel_size=pool_size), 
                 )
         self.conv2 = nn.Sequential(
-                nn.Conv2d(chan_layer_1, chan_layer_2, 3, 1, 2), # ->38 x 45
+                nn.Conv2d(chan_layer_1, chan_layer_2, 3, 1, 2), 
                 nn.ReLU(),
-                nn.MaxPool2d(kernel_size=pool_size), #-> 12 X 15
+                nn.MaxPool2d(kernel_size=pool_size),
                 )
         self.conv3 = nn.Sequential(
-                nn.Conv2d(chan_layer_2, chan_layer_3, 3, 1, 2), #-> 14 X 17
+                nn.Conv2d(chan_layer_2, chan_layer_3, 3, 1, 2), 
                 nn.ReLU(),
-                nn.MaxPool2d(kernel_size=pool_size), #-> 4 X 5
+                nn.MaxPool2d(kernel_size=pool_size), 
                 )
         self.conv4 = nn.Sequential(
-                nn.Conv2d(chan_layer_3, chan_layer_4, 3, 1, 2), #->6 X 7
+                nn.Conv2d(chan_layer_3, chan_layer_4, 3, 1, 2), 
                 nn.ReLU(),
-                nn.MaxPool2d(kernel_size=pool_size), # -> 2 X 2
+                nn.MaxPool2d(kernel_size=pool_size), 
                 )
         self.conv5 = nn.Sequential(
-                nn.Conv2d(chan_layer_4, chan_layer_5, 3, 1, 2), #->6 X 7
+                nn.Conv2d(chan_layer_4, chan_layer_5, 3, 1, 2), 
                 nn.ReLU(),
-                nn.MaxPool2d(kernel_size=pool_size), # -> 2 X 2
+                nn.MaxPool2d(kernel_size=pool_size), 
                 )
         self.conv6 = nn.Sequential(
-                nn.Conv2d(chan_layer_5, chan_layer_6, 3, 1, 2), #->6 X 7
+                nn.Conv2d(chan_layer_5, chan_layer_6, 3, 1, 2), 
                 nn.ReLU(),
-                nn.MaxPool2d(kernel_size=pool_size), # -> 2 X 2
+                nn.MaxPool2d(kernel_size=pool_size), 
                 )
         self.conv7 = nn.Sequential(
-                nn.Conv2d(chan_layer_6, chan_layer_7, 3, 1, 2), #->6 X 7
+                nn.Conv2d(chan_layer_6, chan_layer_7, 3, 1, 2), 
                 nn.ReLU(),
-                nn.MaxPool2d(kernel_size=pool_size), # -> 2 X 2
+                nn.MaxPool2d(kernel_size=pool_size), 
                 )
         self.conv8 = nn.Sequential(
-                nn.Conv2d(chan_layer_7, chan_layer_8, 3, 1, 2), #->6 X 7
+                nn.Conv2d(chan_layer_7, chan_layer_8, 3, 1, 2), 
                 nn.ReLU(),
-                nn.MaxPool2d(kernel_size=pool_size), # -> 2 X 2
+                nn.MaxPool2d(kernel_size=pool_size), 
                 )
         self.init_weight()
 
@@ -237,7 +237,6 @@ class PushController:
 
         ## get indices of end push points inside object mask
         img_inner = cv2.resize(img.copy(), (0,0), fx=s, fy=s, interpolation=cv2.INTER_LINEAR)
-        print('>>>>>>>>>>>>>>>>>....', img.shape)
         h, w = img_inner.shape
         img_end = np.zeros((int(H), int(W)))
         img_end[(int(H)-h)//2:(int(H)+h)//2, (int(W)-w)//2:(int(W)+w)//2] = img_inner.copy()
@@ -367,8 +366,12 @@ def train_model(train_dl, model):
     '''
     bs = args.batch_size
     criterion = nn.MSELoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.0001)
+    
+    # optimizer = torch.optim.SGD(model.parameters(), lr=0.001, momentum=0.99)
     loss_values = []
+    training_start_time = time.time()
+    learning_rate = 0.0001
+    optimizer = torch.optim.Adam (model.parameters(), lr=learning_rate, betas=(0.1, 0.1), eps=1e-09, weight_decay=0, amsgrad=False)#(model.parameters(), lr=0.0001)
     for epoch in range(epochs):
         for i in range(int(num_action_batch)):
             loss_values_per_epoch = []
@@ -399,8 +402,15 @@ def train_model(train_dl, model):
             loss.backward(retain_graph = True)
             optimizer.step()
             loss_values_per_epoch.append(loss.detach())
+
+        # if epoch%30 == 0:
+        #     learning_rate = learning_rate*0.3
+
         loss_values.append(min(loss_values_per_epoch))
-    print('Finished Training!!!')
+
+    training_end_time = time.time()
+    
+    print(Fore.LIGHTCYAN_EX  + f' \n \n >>>>>>> {epochs} epochs Finished Training!!! in {round((training_end_time - training_start_time), 2)} sec.  \n \n ' + Style.RESET_ALL)
     torch.save(model.state_dict(), save_path)
 
     return loss_values
@@ -423,7 +433,7 @@ def draw_loss(loss:list, title:str)->None:
 
 
 if __name__ == "__main__":
-    img = cv2.resize(cv2.imread("target_pose_post_processing.png"), (256, 212))[:,:,0]
+    img = cv2.resize(cv2.imread("target_pose_post_processing.png"), (W, H))[:,:,0]
     img_in_next = generate_goal_img(img.copy(), 30, 10, -10)
     actions = PushController()
     actions = actions.sample_action(img=img, num_actions=args.num_action)
